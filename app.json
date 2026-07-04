@@ -34,6 +34,12 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Althea uses the microphone so you can add voice notes to your travel journal."
+        }
       ]
     ],
     "experiments": {

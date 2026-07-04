@@ -7,13 +7,16 @@ import { ActivityIndicator, Alert, Platform, TextInput, View } from 'react-nativ
 import { AButton } from '@/components/ui/button';
 import { Screen } from '@/components/ui/screen';
 import { AText } from '@/components/ui/text';
+import { VoicePlayer, VoiceRecorder } from '@/components/voice-note';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import {
+  addVoiceNote,
   createEntry,
   deleteEntry,
   fetchEntry,
   signedUrls,
+  transcribeVoiceNote,
   updateEntry,
 } from '@/lib/journal';
 import { useTheme } from '@/hooks/use-theme';
@@ -46,6 +49,9 @@ export default function JournalEntryScreen() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [picked, setPicked] = useState<Picked[]>([]);
   const [existingUrls, setExistingUrls] = useState<string[]>([]);
+  const [audioUri, setAudioUri] = useState<string | null>(null); // create mode: recorded, not yet saved
+  const [existingAudio, setExistingAudio] = useState<{ path: string; url: string }[]>([]);
+  const [transcribing, setTranscribing] = useState<string | null>(null);
 
   useEffect(() => {
     if (!editing || !id) return;
@@ -59,9 +65,10 @@ export default function JournalEntryScreen() {
       setPlace(entry.placeName);
       setCaption(entry.caption);
       setDate(entry.takenAt.slice(0, 10) || date);
-      const urls = await signedUrls(entry.mediaPaths);
+      const urls = await signedUrls([...entry.mediaPaths, ...entry.audioPaths]);
       if (active) {
         setExistingUrls(entry.mediaPaths.map((p) => urls[p]).filter(Boolean));
+        setExistingAudio(entry.audioPaths.filter((p) => urls[p]).map((p) => ({ path: p, url: urls[p] })));
         setLoading(false);
       }
     })();
@@ -92,6 +99,41 @@ export default function JournalEntryScreen() {
     );
   };
 
+  const reloadAudio = async () => {
+    if (!id) return;
+    const entry = await fetchEntry(String(id));
+    if (!entry) return;
+    const urls = await signedUrls(entry.audioPaths);
+    setExistingAudio(entry.audioPaths.filter((p) => urls[p]).map((p) => ({ path: p, url: urls[p] })));
+  };
+
+  const addRecordedToEntry = async (uri: string) => {
+    if (!user || !id) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await addVoiceNote(String(id), user.id, uri);
+      await reloadAudio();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the voice note.');
+    }
+    setBusy(false);
+  };
+
+  const transcribe = async (path: string) => {
+    setTranscribing(path);
+    setError(null);
+    try {
+      const text = await transcribeVoiceNote(path);
+      const merged = caption.trim() ? `${caption.trim()}\n\n${text}` : text;
+      setCaption(merged);
+      if (id) await updateEntry(String(id), { caption: merged });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not transcribe.');
+    }
+    setTranscribing(null);
+  };
+
   const save = async () => {
     if (!user) return;
     setBusy(true);
@@ -106,6 +148,7 @@ export default function JournalEntryScreen() {
           caption,
           takenAt,
           photosBase64: picked.map((p) => p.base64),
+          audioUri,
         });
       }
       router.back();
@@ -209,6 +252,37 @@ export default function JournalEntryScreen() {
         style={[inputStyle, { minHeight: 90, textAlignVertical: 'top' }]}
       />
 
+      <AText variant="eyebrow" color="secondary" style={{ marginTop: Spacing.three }}>
+        Voice note
+      </AText>
+      <View style={{ gap: Spacing.two }}>
+        {/* Existing notes (edit mode): play + transcribe into the note. */}
+        {existingAudio.map((a, i) => (
+          <View key={a.path} style={{ gap: 6 }}>
+            <VoicePlayer uri={a.url} label={`Voice note ${i + 1}`} />
+            <AButton
+              label={transcribing === a.path ? 'Transcribing…' : 'Transcribe into note'}
+              kind="ghost"
+              onPress={() => void transcribe(a.path)}
+              disabled={transcribing !== null}
+            />
+          </View>
+        ))}
+
+        {/* Create mode: preview the just-recorded clip before saving. */}
+        {!editing && audioUri && <VoicePlayer uri={audioUri} label="New voice note" />}
+
+        {/* Recorder: adds to the entry immediately in edit mode, or stages it in create mode. */}
+        {editing ? (
+          <VoiceRecorder onRecorded={(uri) => void addRecordedToEntry(uri)} />
+        ) : (
+          <VoiceRecorder onRecorded={setAudioUri} />
+        )}
+        <AText variant="caption" color="secondary">
+          Narrate the moment — Althea can transcribe it into your note.
+        </AText>
+      </View>
+
       {error && (
         <AText variant="caption" style={{ color: theme.warn, marginTop: Spacing.two }}>
           {error}
@@ -219,7 +293,7 @@ export default function JournalEntryScreen() {
         <AButton
           label={busy ? 'Saving…' : editing ? 'Save changes' : 'Add to journal'}
           onPress={save}
-          disabled={busy || (!editing && picked.length === 0 && !place)}
+          disabled={busy || (!editing && picked.length === 0 && !place && !audioUri)}
           style={{ opacity: busy ? 0.6 : 1 }}
         />
         {editing && <AButton label="Delete moment" kind="ghost" onPress={remove} disabled={busy} />}

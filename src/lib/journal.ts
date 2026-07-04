@@ -6,7 +6,9 @@
  */
 
 import { decode } from 'base64-arraybuffer';
+import { File } from 'expo-file-system';
 import { useCallback, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 
 import { useAuth } from '@/lib/auth';
 import { isLive, supabase } from '@/lib/supabase';
@@ -21,6 +23,7 @@ export type JournalEntry = {
   longitude: number | null;
   caption: string;
   mediaPaths: string[];
+  audioPaths: string[];
   orderIndex: number;
 };
 
@@ -34,6 +37,7 @@ function rowToEntry(row: Record<string, unknown>): JournalEntry {
     longitude: row.longitude != null ? Number(row.longitude) : null,
     caption: String(row.caption ?? ''),
     mediaPaths: Array.isArray(row.media_paths) ? (row.media_paths as string[]) : [],
+    audioPaths: Array.isArray(row.audio_paths) ? (row.audio_paths as string[]) : [],
     orderIndex: Number(row.order_index ?? 0),
   };
 }
@@ -45,6 +49,56 @@ async function uploadPhoto(userId: string, base64: string, i: number): Promise<s
     .upload(path, decode(base64), { contentType: 'image/jpeg', upsert: false });
   if (error) throw new Error(error.message);
   return path;
+}
+
+/**
+ * Upload a recorded voice note. The recorder hands back a local URI: `file://`
+ * on native (read to base64 → bytes) and a `blob:` URL on web (fetched to a
+ * Blob). HIGH_QUALITY records m4a on native and webm on web.
+ */
+async function uploadAudio(userId: string, uri: string): Promise<string> {
+  const web = Platform.OS === 'web';
+  const ext = web ? 'webm' : 'm4a';
+  const contentType = web ? 'audio/webm' : 'audio/mp4';
+  const path = `${userId}/audio-${Date.now()}.${ext}`;
+  const body: ArrayBuffer | Blob = web
+    ? await (await fetch(uri)).blob()
+    : decode(await new File(uri).base64());
+  const { error } = await supabase!.storage
+    .from('journal')
+    .upload(path, body, { contentType, upsert: false });
+  if (error) throw new Error(error.message);
+  return path;
+}
+
+/** Attach a voice note to an existing moment (edit mode). */
+export async function addVoiceNote(id: string, userId: string, uri: string): Promise<void> {
+  if (!supabase) throw new Error('The demo journal is read-only.');
+  const path = await uploadAudio(userId, uri);
+  const { data } = await supabase
+    .from('journal_entries')
+    .select('audio_paths')
+    .eq('id', id)
+    .maybeSingle();
+  const existing = Array.isArray(data?.audio_paths) ? (data.audio_paths as string[]) : [];
+  const { error } = await supabase
+    .from('journal_entries')
+    .update({ audio_paths: [...existing, path] })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Transcribe a stored voice note via the `transcribe-audio` edge function.
+ * Returns the transcript text, or throws with a friendly message when the
+ * function isn't configured (no speech-to-text key set yet).
+ */
+export async function transcribeVoiceNote(path: string): Promise<string> {
+  if (!supabase) throw new Error('Sign in to transcribe.');
+  const { data, error } = await supabase.functions.invoke('transcribe-audio', { body: { path } });
+  if (error) throw new Error(error.message);
+  if (!data?.configured) throw new Error(data?.message ?? 'Transcription isn’t set up yet.');
+  return String(data.text ?? '');
 }
 
 export async function fetchEntry(id: string): Promise<JournalEntry | null> {
@@ -65,7 +119,14 @@ export async function listEntries(userId: string): Promise<JournalEntry[]> {
 
 export async function createEntry(
   userId: string,
-  args: { placeName: string; caption: string; takenAt: string; tripId?: string | null; photosBase64: string[] }
+  args: {
+    placeName: string;
+    caption: string;
+    takenAt: string;
+    tripId?: string | null;
+    photosBase64: string[];
+    audioUri?: string | null;
+  }
 ): Promise<void> {
   if (!supabase) throw new Error('Sign in to record your trip.');
   let latitude: number | null = null;
@@ -81,6 +142,8 @@ export async function createEntry(
   for (let i = 0; i < args.photosBase64.length; i++) {
     media_paths.push(await uploadPhoto(userId, args.photosBase64[i], i));
   }
+  const audio_paths: string[] = [];
+  if (args.audioUri) audio_paths.push(await uploadAudio(userId, args.audioUri));
   const { error } = await supabase.from('journal_entries').insert({
     user_id: userId,
     trip_id: args.tripId ?? null,
@@ -90,6 +153,7 @@ export async function createEntry(
     longitude,
     caption: args.caption.trim() || null,
     media_paths,
+    audio_paths,
   });
   if (error) throw new Error(error.message);
 }
