@@ -72,6 +72,10 @@ function RootNavigator() {
           name="scan"
           options={{ title: 'Scan a garment', headerTitleStyle: { fontFamily: Fonts?.serif } }}
         />
+        <Stack.Screen
+          name="share"
+          options={{ title: 'Share your board', headerTitleStyle: { fontFamily: Fonts?.serif } }}
+        />
       </Stack>
     </ThemeProvider>
   );

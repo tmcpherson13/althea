@@ -136,6 +136,7 @@ export default function LookbookScreen() {
       {plan.trip.days.map((day) => (
         <DayCard key={day.id} day={day} garments={plan.garments} alternates={plan.slotAlternates} />
       ))}
+      <AButton label="Share your board ✦" kind="soft" onPress={() => router.push('/share')} />
     </Screen>
   );
 }
