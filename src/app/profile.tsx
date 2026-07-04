@@ -1,12 +1,15 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, TextInput, View } from 'react-native';
 
 import { AButton } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
 import { AText } from '@/components/ui/text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
 import { STYLE_OPTIONS, updateProfile, useProfile, type Profile } from '@/lib/data';
+import { useEntitlement } from '@/lib/entitlement';
 import { useTheme } from '@/hooks/use-theme';
 
 const SIZE_FIELDS: { key: keyof Profile['sizes']; label: string }[] = [
@@ -20,6 +23,7 @@ export default function ProfileScreen() {
   const theme = useTheme();
   const { user, requiresAuth, signOut } = useAuth();
   const { profile, loading, live } = useProfile();
+  const { plus } = useEntitlement();
 
   const [form, setForm] = useState<Profile>(profile);
   const [busy, setBusy] = useState(false);
@@ -162,6 +166,23 @@ export default function ProfileScreen() {
           </View>
         ))}
       </View>
+
+      <AText variant="eyebrow" color="secondary" style={{ marginTop: Spacing.three }}>
+        Membership
+      </AText>
+      <Pressable accessibilityRole="button" onPress={() => router.push('/paywall')}>
+        <Card style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ flex: 1, paddingRight: Spacing.two }}>
+            <AText style={{ fontWeight: '600' }}>{plus ? 'Althea Plus' : 'Free plan'}</AText>
+            <AText variant="caption" color="secondary">
+              {plus ? 'Unlimited trips & wardrobe · ad-free' : 'One trip at a time · up to 50 items'}
+            </AText>
+          </View>
+          <AText variant="small" style={{ color: theme.rose, fontWeight: '700' }}>
+            {plus ? 'Manage' : 'Go Plus ✦'}
+          </AText>
+        </Card>
+      </Pressable>
 
       {status && (
         <AText variant="caption" color="rose" style={{ marginTop: Spacing.two }}>

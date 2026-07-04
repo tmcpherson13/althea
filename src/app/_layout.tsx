@@ -96,6 +96,14 @@ function RootNavigator() {
           name="trips"
           options={{ title: 'Your trips', headerTitleStyle: { fontFamily: Fonts?.serif } }}
         />
+        <Stack.Screen
+          name="paywall"
+          options={{
+            presentation: 'modal',
+            title: 'Althea Plus',
+            headerTitleStyle: { fontFamily: Fonts?.serif },
+          }}
+        />
       </Stack>
     </ThemeProvider>
   );

@@ -9,7 +9,8 @@ import { Screen } from '@/components/ui/screen';
 import { AText } from '@/components/ui/text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
-import { saveGarment, scanGarment, type ScannedGarment } from '@/lib/data';
+import { saveGarment, scanGarment, useWardrobe, type ScannedGarment } from '@/lib/data';
+import { FREE_LIMITS, useEntitlement } from '@/lib/entitlement';
 import { isLive } from '@/lib/supabase';
 import { useTheme } from '@/hooks/use-theme';
 import type { Garment, GarmentCategory } from '@/lib/types';
@@ -36,11 +37,14 @@ function toPreview(g: ScannedGarment): Garment {
 export default function ScanScreen() {
   const theme = useTheme();
   const { user } = useAuth();
+  const { items } = useWardrobe();
+  const { plus } = useEntitlement();
   const [phase, setPhase] = useState<Phase>('pick');
   const [error, setError] = useState<string | null>(null);
   const [g, setG] = useState<ScannedGarment | null>(null);
 
   const canScan = isLive && Boolean(user);
+  const atItemLimit = canScan && !plus && items.length >= FREE_LIMITS.wardrobeItems;
 
   const runScan = async (source: 'camera' | 'library') => {
     setError(null);
@@ -247,6 +251,24 @@ export default function ScanScreen() {
   }
 
   // phase === 'pick'
+  if (atItemLimit) {
+    return (
+      <Screen>
+        <View style={{ paddingVertical: Spacing.five, gap: Spacing.two, alignItems: 'center' }}>
+          <AText variant="title" style={{ textAlign: 'center' }}>
+            Your free closet is full
+          </AText>
+          <AText variant="small" color="secondary" style={{ textAlign: 'center' }}>
+            The free plan holds up to {FREE_LIMITS.wardrobeItems} items. Remove a few you don&apos;t
+            travel with, or go Plus for an unlimited wardrobe.
+          </AText>
+          <AButton label="Go Plus ✦" onPress={() => router.push('/paywall?reason=wardrobe')} />
+          <AButton label="Back" kind="ghost" onPress={() => router.back()} />
+        </View>
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
       <AText variant="display" style={{ marginTop: Spacing.two }}>

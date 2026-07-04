@@ -8,7 +8,8 @@ import { AText } from '@/components/ui/text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
-import { createTrip } from '@/lib/data';
+import { createTrip, useTrips } from '@/lib/data';
+import { FREE_LIMITS, useEntitlement } from '@/lib/entitlement';
 
 const ACTIVITIES = ['City walking', 'Nice dinners', 'Beach', 'Hiking', 'Business', 'Religious sites'];
 const LUGGAGE: { label: string; value: string }[] = [
@@ -56,6 +57,12 @@ export default function NewTripScreen() {
   const theme = useTheme();
   const { requiresAuth, user } = useAuth();
   const live = requiresAuth && Boolean(user);
+  const { plus } = useEntitlement();
+  const { trips } = useTrips();
+
+  // Free tier keeps one live trip at a time; upcoming/traveling trips count.
+  const liveTripCount = trips.filter((t) => t.status === 'planned' || t.status === 'active').length;
+  const atTripLimit = live && !plus && liveTripCount >= FREE_LIMITS.activeTrips;
 
   const [destination, setDestination] = useState('Lisbon, Portugal');
   const [activities, setActivities] = useState<string[]>(['City walking', 'Nice dinners']);
@@ -70,6 +77,10 @@ export default function NewTripScreen() {
     if (!live || !user) {
       router.back();
       router.push('/packing');
+      return;
+    }
+    if (atTripLimit) {
+      router.push('/paywall?reason=trips');
       return;
     }
     setBusy(true);
@@ -166,11 +177,22 @@ export default function NewTripScreen() {
 
       <View style={{ marginTop: Spacing.four, gap: Spacing.two }}>
         <AButton
-          label={busy ? 'Building your capsule…' : 'Build my capsule ✦'}
+          label={
+            busy
+              ? 'Building your capsule…'
+              : atTripLimit
+                ? 'Upgrade to add another trip ✦'
+                : 'Build my capsule ✦'
+          }
           onPress={build}
           disabled={busy}
           style={{ opacity: busy ? 0.6 : 1 }}
         />
+        {atTripLimit && (
+          <AText variant="caption" color="secondary" style={{ textAlign: 'center' }}>
+            Free plan keeps one trip at a time. Delete your current trip or go Plus for unlimited.
+          </AText>
+        )}
         {!live && (
           <AText variant="caption" color="secondary" style={{ textAlign: 'center' }}>
             Demo: the engine walkthrough uses the Marrakech plan.
