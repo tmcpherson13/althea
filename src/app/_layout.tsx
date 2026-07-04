@@ -76,6 +76,10 @@ function RootNavigator() {
           name="share"
           options={{ title: 'Share your board', headerTitleStyle: { fontFamily: Fonts?.serif } }}
         />
+        <Stack.Screen
+          name="garment"
+          options={{ title: 'Garment', headerTitleStyle: { fontFamily: Fonts?.serif } }}
+        />
       </Stack>
     </ThemeProvider>
   );

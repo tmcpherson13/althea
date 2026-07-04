@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { AButton } from '@/components/ui/button';
 import { Swatch } from '@/components/ui/swatch';
@@ -56,9 +56,12 @@ export default function WardrobeScreen() {
       ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two }}>
           {items.map((g) => (
-            <View
+            <Pressable
               key={g.id}
-              style={{
+              accessibilityRole="button"
+              accessibilityLabel={`Edit ${g.name}`}
+              onPress={() => router.push({ pathname: '/garment', params: { id: g.id } })}
+              style={({ pressed }) => ({
                 width: '31.5%',
                 minWidth: 100,
                 borderWidth: 1,
@@ -66,7 +69,8 @@ export default function WardrobeScreen() {
                 borderRadius: Radius.md,
                 overflow: 'hidden',
                 backgroundColor: theme.backgroundElement,
-              }}>
+                opacity: pressed ? 0.7 : 1,
+              })}>
               <Swatch garment={g} size={104} />
               <View style={{ padding: 8, gap: 2 }}>
                 <AText variant="caption" style={{ fontWeight: '600' }} numberOfLines={1}>
@@ -76,7 +80,7 @@ export default function WardrobeScreen() {
                   {g.meta}
                 </AText>
               </View>
-            </View>
+            </Pressable>
           ))}
         </View>
       )}

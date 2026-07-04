@@ -69,6 +69,45 @@ export async function scanGarment(
   return data.garment as ScannedGarment;
 }
 
+/** Fields the garment detail screen can edit. */
+export type GarmentPatch = {
+  name: string;
+  category: GarmentCategory;
+  fabric: string;
+  formality: number;
+  coverage: { shoulders: boolean; knees: boolean };
+};
+
+/** Fetch a single garment by id (live), or find it in the demo closet. */
+export async function fetchGarment(id: string): Promise<Garment | null> {
+  if (!supabase) return mockWardrobe.find((g) => g.id === id) ?? null;
+  const { data } = await supabase.from('wardrobe_items').select('*').eq('id', id).maybeSingle();
+  return data ? rowToGarment(data) : null;
+}
+
+/** Update an owned garment. RLS scopes the write to the signed-in user. */
+export async function updateGarment(id: string, patch: GarmentPatch): Promise<void> {
+  if (!supabase) throw new Error('The demo closet is read-only.');
+  const { error } = await supabase
+    .from('wardrobe_items')
+    .update({
+      name: patch.name,
+      category: patch.category,
+      fabric: patch.fabric || null,
+      formality: patch.formality,
+      coverage: patch.coverage,
+    })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+/** Delete an owned garment. */
+export async function deleteGarment(id: string): Promise<void> {
+  if (!supabase) throw new Error('The demo closet is read-only.');
+  const { error } = await supabase.from('wardrobe_items').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 /** Persist a confirmed garment to the signed-in user's closet. */
 export async function saveGarment(userId: string, g: ScannedGarment): Promise<void> {
   if (!supabase) throw new Error('Not signed in.');
