@@ -189,6 +189,8 @@ export type TripRecord = {
   endsOn: string; // ISO
   nights: number;
   activities: string[];
+  status: string;
+  createdAt: string;
   weather: { highC: number; lowC: number; precipChance: number; label: string } | null;
 };
 
@@ -210,6 +212,8 @@ function rowToTripRecord(row: Record<string, unknown>): TripRecord {
     endsOn: String(row.ends_on ?? ''),
     nights: Math.max(1, daysUntil(String(row.ends_on), String(row.starts_on)) || 1),
     activities: Array.isArray(row.activities) ? (row.activities as string[]) : [],
+    status: String(row.status ?? 'planned'),
+    createdAt: String(row.created_at ?? ''),
     weather:
       w.highC != null
         ? {
@@ -272,7 +276,12 @@ function tripToInput(t: TripRecord, styleRegister?: StyleRegister): TripInput {
   };
 }
 
-/** The user's most recent planned/active trip, or null. Demo has none. */
+/**
+ * The active trip that drives Home / Packing / Lookbook. Resolves to the trip
+ * the user explicitly selected (profiles.selected_trip_id); if none is set (or
+ * it was deleted), falls back to their most-recent planned/active trip. Demo
+ * has none.
+ */
 export function useActiveTrip(): { trip: TripRecord | null; loading: boolean; refresh: () => Promise<void> } {
   const { user } = useAuth();
   const live = isLive && Boolean(user);
@@ -281,6 +290,20 @@ export function useActiveTrip(): { trip: TripRecord | null; loading: boolean; re
 
   const fetchTrip = useCallback(async (): Promise<TripRecord | null> => {
     if (!live || !supabase || !user) return null;
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('selected_trip_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    const selectedId = prof?.selected_trip_id as string | null | undefined;
+    if (selectedId) {
+      const { data } = await supabase
+        .from('trips')
+        .select('*')
+        .eq('id', selectedId)
+        .maybeSingle();
+      if (data) return rowToTripRecord(data);
+    }
     const { data } = await supabase
       .from('trips')
       .select('*')
@@ -312,6 +335,91 @@ export function useActiveTrip(): { trip: TripRecord | null; loading: boolean; re
   }, [fetchTrip]);
 
   return { trip, loading, refresh };
+}
+
+/** All of the signed-in user's trips, soonest departure first. */
+async function listTrips(userId: string): Promise<TripRecord[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('trips')
+    .select('*')
+    .eq('user_id', userId)
+    .order('starts_on', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(rowToTripRecord);
+}
+
+/** Make `tripId` the active trip (drives Home / Packing / Lookbook). */
+export async function setActiveTrip(userId: string, tripId: string): Promise<void> {
+  if (!supabase) throw new Error('Sign in to switch trips.');
+  const { error } = await supabase
+    .from('profiles')
+    .upsert({ id: userId, selected_trip_id: tripId }, { onConflict: 'id' });
+  if (error) throw new Error(error.message);
+}
+
+/** Delete a trip. RLS scopes this to the owner; selection clears via ON DELETE SET NULL. */
+export async function deleteTrip(tripId: string): Promise<void> {
+  if (!supabase) throw new Error('The demo trips are read-only.');
+  const { error } = await supabase.from('trips').delete().eq('id', tripId);
+  if (error) throw new Error(error.message);
+}
+
+/** Trips list + the currently-selected id, with mutators. */
+export function useTrips(): {
+  trips: TripRecord[];
+  selectedId: string | null;
+  activeId: string | null;
+  loading: boolean;
+  live: boolean;
+  refresh: () => Promise<void>;
+} {
+  const { user } = useAuth();
+  const live = isLive && Boolean(user);
+  const [trips, setTrips] = useState<TripRecord[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(live);
+
+  const load = useCallback(async () => {
+    if (!live || !supabase || !user) return { trips: [] as TripRecord[], selectedId: null };
+    const [rows, prof] = await Promise.all([
+      listTrips(user.id),
+      supabase.from('profiles').select('selected_trip_id').eq('id', user.id).maybeSingle(),
+    ]);
+    const sel = (prof.data?.selected_trip_id as string | null | undefined) ?? null;
+    return { trips: rows, selectedId: sel };
+  }, [live, user]);
+
+  const refresh = useCallback(async () => {
+    const next = await load();
+    setTrips(next.trips);
+    setSelectedId(next.selectedId);
+    setLoading(false);
+  }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    void load().then((next) => {
+      if (active) {
+        setTrips(next.trips);
+        setSelectedId(next.selectedId);
+        setLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [load]);
+
+  // The trip that actually drives the app: explicit selection, else the
+  // most-recent planned/active — mirrors useActiveTrip's fallback so the
+  // list can mark the same trip as current even before one is picked.
+  const activeId =
+    (selectedId && trips.some((t) => t.id === selectedId) && selectedId) ||
+    trips.find((t) => t.status === 'planned' || t.status === 'active')?.id ||
+    null;
+
+  return { trips, selectedId, activeId, loading, live, refresh };
 }
 
 // ---------- profile ----------

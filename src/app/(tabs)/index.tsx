@@ -206,7 +206,22 @@ export default function HomeScreen() {
           </Card>
         </>
       )}
-      <AButton label="+ Plan a new trip" kind="soft" onPress={() => router.push('/new-trip')} />
+      <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+        <AButton
+          label="+ Plan a new trip"
+          kind="soft"
+          onPress={() => router.push('/new-trip')}
+          style={{ flex: 1 }}
+        />
+        {requiresAuth && (
+          <AButton
+            label="Your trips"
+            kind="ghost"
+            onPress={() => router.push('/trips')}
+            style={{ flex: 1 }}
+          />
+        )}
+      </View>
 
       <AText variant="eyebrow" color="secondary" style={{ marginTop: Spacing.four }}>
         Modules — enable as you go

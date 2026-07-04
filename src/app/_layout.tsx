@@ -92,6 +92,10 @@ function RootNavigator() {
           name="profile"
           options={{ title: 'Profile', headerTitleStyle: { fontFamily: Fonts?.serif } }}
         />
+        <Stack.Screen
+          name="trips"
+          options={{ title: 'Your trips', headerTitleStyle: { fontFamily: Fonts?.serif } }}
+        />
       </Stack>
     </ThemeProvider>
   );
