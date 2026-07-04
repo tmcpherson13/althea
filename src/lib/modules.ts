@@ -18,8 +18,8 @@ export const modules: AppModule[] = [
   {
     key: 'journal',
     name: 'Travel journal',
-    description: 'Map log, voice notes & printed travel books.',
-    enabled: false,
+    description: 'Map your journey, record moments, share a recap.',
+    enabled: true,
     phase: 'Phase 2',
   },
   {

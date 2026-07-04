@@ -31,3 +31,26 @@ export function shareBlock(plan: Plan): string {
   const { text, hashtags } = shareCaption(plan);
   return `${text}\n\n${hashtags.join(' ')}`;
 }
+
+export type JourneySummary = { places: string[]; photoCount: number };
+
+export function journeyCaption(s: JourneySummary): { text: string; hashtags: string[] } {
+  const places = s.places.filter(Boolean);
+  const n = places.length;
+  const first = places[0];
+  const last = places[n - 1];
+  const route = n > 1 && first && last && first !== last ? `${first} → ${last}` : first || 'my journey';
+  const text = `${n} ${n === 1 ? 'place' : 'places'}. ${s.photoCount} ${s.photoCount === 1 ? 'moment' : 'moments'}. ${route}, captured with Althea ✦`;
+  const hashtags = [
+    '#Althea',
+    '#TravelBeautifully',
+    '#TravelJournal',
+    ...places.slice(0, 3).map((p) => `#${slug(p.split(',')[0])}`).filter((t) => t.length > 1),
+  ];
+  return { text, hashtags };
+}
+
+export function journeyBlock(s: JourneySummary): string {
+  const { text, hashtags } = journeyCaption(s);
+  return `${text}\n\n${hashtags.join(' ')}`;
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { shareBlock, shareCaption } from '../share';
+import { journeyCaption, shareBlock, shareCaption } from '../share';
 import { demoPlan } from '../mock';
 
 describe('shareCaption', () => {
@@ -30,5 +30,25 @@ describe('shareBlock', () => {
     const block = shareBlock(demoPlan);
     expect(block).toContain('\n\n');
     expect(block.endsWith(shareCaption(demoPlan).hashtags.join(' '))).toBe(true);
+  });
+});
+
+describe('journeyCaption', () => {
+  it('renders a route and pluralizes correctly', () => {
+    const { text } = journeyCaption({ places: ['Marrakech', 'Lisbon', 'Amalfi'], photoCount: 12 });
+    expect(text).toContain('3 places');
+    expect(text).toContain('12 moments');
+    expect(text).toContain('Marrakech → Amalfi');
+  });
+  it('handles a single place and single moment', () => {
+    const { text } = journeyCaption({ places: ['Kyoto'], photoCount: 1 });
+    expect(text).toContain('1 place.');
+    expect(text).toContain('1 moment.');
+    expect(text).toContain('Kyoto');
+  });
+  it('adds destination hashtags without spaces', () => {
+    const { hashtags } = journeyCaption({ places: ['San Sebastián'], photoCount: 3 });
+    expect(hashtags).toContain('#TravelJournal');
+    for (const tag of hashtags) expect(tag).not.toMatch(/\s/);
   });
 });

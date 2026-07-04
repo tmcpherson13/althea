@@ -80,6 +80,14 @@ function RootNavigator() {
           name="garment"
           options={{ title: 'Garment', headerTitleStyle: { fontFamily: Fonts?.serif } }}
         />
+        <Stack.Screen
+          name="journal-entry"
+          options={{ title: 'Moment', headerTitleStyle: { fontFamily: Fonts?.serif } }}
+        />
+        <Stack.Screen
+          name="journey-share"
+          options={{ title: 'Share your journey', headerTitleStyle: { fontFamily: Fonts?.serif } }}
+        />
       </Stack>
     </ThemeProvider>
   );
