@@ -4,7 +4,7 @@
  * Phase 1 wiring; shapes match the schema 1:1.
  */
 
-import type { Garment, Trip } from './types';
+import type { Garment, Plan, Trip } from './types';
 
 export const wardrobe: Garment[] = [
   {
@@ -281,3 +281,13 @@ export const trip: Trip = {
 };
 
 export const draftTrip = { city: 'Lisbon', country: 'Portugal', status: 'Draft · dates not set' };
+
+/** The hand-authored demo plan, in the same shape the live generator produces. */
+export const demoPlan: Plan = {
+  trip,
+  garments: Object.fromEntries(wardrobe.map((g) => [g.id, g])),
+  groups: packingGroups,
+  gaps: [packingGap],
+  slotAlternates,
+  stats: { items: 11, combinatorialOutfits: 16, wearableLooks: 12, carryOnFit: true },
+};

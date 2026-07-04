@@ -36,7 +36,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="packing"
         options={{
-          title: 'Marrakech capsule',
+          title: 'Packing',
           tabBarLabel: 'Packing',
           tabBarIcon: ({ color, size }) => <Ionicons name="briefcase-outline" color={color} size={size} />,
         }}

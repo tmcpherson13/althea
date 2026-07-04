@@ -57,3 +57,35 @@ export type Trip = {
 };
 
 export type Verdict = { level: 'ok' | 'warn'; message: string };
+
+// ---------- packing plan (what the Packing/Lookbook screens render) ----------
+
+export type PackingLine = { garmentId: string; why: string; badge?: 'culture' | 'rewear' };
+
+export type PackingGroup = { title: string; lines: PackingLine[] };
+
+export type Gap = { name: string; why: string; cta: string };
+
+export type CapsuleStats = {
+  items: number;
+  /** Sudoku combinatorial maximum: tops×bottoms×(1+layers) + dresses. */
+  combinatorialOutfits: number;
+  /** Honest wearable looks: distinct top×bottom pairings + dresses. */
+  wearableLooks: number;
+  carryOnFit: boolean;
+};
+
+/**
+ * A complete, renderable plan. Both the demo (mock) and the live Sudoku
+ * generator produce this shape, so the screens have a single code path.
+ * `garments` is the id→garment lookup scoped to this plan's capsule.
+ */
+export type Plan = {
+  trip: Trip;
+  garments: Record<string, Garment>;
+  groups: PackingGroup[];
+  gaps: Gap[];
+  /** Per-slot alternatives (capsule item ids) for the Lookbook mix & match. */
+  slotAlternates: Partial<Record<OutfitSlot, string[]>>;
+  stats: CapsuleStats;
+};

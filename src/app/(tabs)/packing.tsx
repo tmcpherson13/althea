@@ -1,6 +1,6 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { Alert, Platform, Pressable, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Alert, Platform, Pressable, View } from 'react-native';
 
 import { Badge } from '@/components/ui/badge';
 import { AButton } from '@/components/ui/button';
@@ -10,24 +10,104 @@ import { Screen } from '@/components/ui/screen';
 import { AText } from '@/components/ui/text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { capsuleStats } from '@/lib/engine';
-import { garmentById, packingGap, packingGroups, trip, wardrobe } from '@/lib/mock';
+import { useActiveTrip, usePlan } from '@/lib/data';
+import type { Gap } from '@/lib/types';
 
-const packedGarments = wardrobe.filter((g) => g.category !== 'accessory');
+function notify(title: string, message: string) {
+  if (Platform.OS === 'web') window.alert(`${title}\n\n${message}`);
+  else Alert.alert(title, message);
+}
+
+function GapCard({ gap }: { gap: Gap }) {
+  const theme = useTheme();
+  return (
+    <View
+      style={{
+        borderWidth: 1,
+        borderColor: theme.warn,
+        borderRadius: Radius.lg,
+        padding: Spacing.three,
+        gap: 6,
+      }}>
+      <AText style={{ fontWeight: '600' }}>{gap.name}</AText>
+      <AText variant="caption" color="secondary">
+        {gap.why}
+      </AText>
+      <AButton
+        label={gap.cta}
+        onPress={() => notify('Shop the gap', 'Phase 1 wiring: opens size-filtered options via affiliate partners.')}
+      />
+    </View>
+  );
+}
 
 export default function PackingScreen() {
   const theme = useTheme();
+  const { plan, loading, needsWardrobe } = usePlan();
+  const { refresh } = useActiveTrip();
   const [briefOpen, setBriefOpen] = useState(false);
-  const stats = capsuleStats(packedGarments);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh])
+  );
+
+  if (loading) {
+    return (
+      <Screen>
+        <View style={{ paddingVertical: Spacing.six, alignItems: 'center' }}>
+          <ActivityIndicator color={theme.rose} />
+        </View>
+      </Screen>
+    );
+  }
+
+  if (needsWardrobe) {
+    return (
+      <Screen>
+        <View style={{ paddingVertical: Spacing.five, gap: Spacing.two, alignItems: 'center' }}>
+          <AText variant="title" style={{ textAlign: 'center' }}>
+            Scan your closet first
+          </AText>
+          <AText variant="small" color="secondary" style={{ textAlign: 'center' }}>
+            Althea packs from clothes you own — add a few garments and your capsule appears here.
+          </AText>
+          <AButton label="Scan a garment" onPress={() => router.push('/scan')} />
+        </View>
+      </Screen>
+    );
+  }
+
+  if (!plan) {
+    return (
+      <Screen>
+        <View style={{ paddingVertical: Spacing.five, gap: Spacing.two, alignItems: 'center' }}>
+          <AText variant="title" style={{ textAlign: 'center' }}>
+            No trip yet
+          </AText>
+          <AText variant="small" color="secondary" style={{ textAlign: 'center' }}>
+            Tell Althea where you&apos;re going and she&apos;ll build your capsule.
+          </AText>
+          <AButton label="Plan a trip" onPress={() => router.push('/new-trip')} />
+        </View>
+      </Screen>
+    );
+  }
+
+  const { trip, stats, groups, gaps, garments } = plan;
 
   return (
     <Screen>
+      <AText variant="title" style={{ marginTop: Spacing.two }}>
+        {trip.city} capsule
+      </AText>
       <AText variant="small" color="secondary">
         {trip.startsOn} – {trip.endsOn} · {trip.highTempC}°/{trip.lowTempC}° ·{' '}
         {trip.activities.join(', ')}
       </AText>
 
-      {/* Capsule stats */}
+      {/* Capsule stats — honest wearable count headline, combinatorial as "up to". */}
       <View
         style={{
           flexDirection: 'row',
@@ -39,8 +119,8 @@ export default function PackingScreen() {
         {(
           [
             [String(stats.items), 'items'],
-            [String(stats.outfits), 'outfits'],
-            ['100%', 'carry-on'],
+            [String(stats.wearableLooks), 'looks'],
+            [stats.carryOnFit ? '100%' : 'checked', 'carry-on'],
           ] as const
         ).map(([value, label], i) => (
           <View
@@ -65,14 +145,9 @@ export default function PackingScreen() {
 
       {/* Culture briefing */}
       <View
-        style={{
-          backgroundColor: theme.accentSoft,
-          borderRadius: Radius.lg,
-          padding: Spacing.three,
-          gap: 6,
-        }}>
+        style={{ backgroundColor: theme.accentSoft, borderRadius: Radius.lg, padding: Spacing.three, gap: 6 }}>
         <AText variant="eyebrow" color="rose">
-          ✦ Culture briefing · {trip.country}
+          ✦ Culture briefing · {trip.country || trip.city}
         </AText>
         <AText variant="small">{trip.cultureBrief.headline}</AText>
         {briefOpen &&
@@ -81,28 +156,31 @@ export default function PackingScreen() {
               {line}
             </AText>
           ))}
-        <Pressable accessibilityRole="button" onPress={() => setBriefOpen((v) => !v)}>
-          <AText variant="small" color="rose" style={{ fontWeight: '600' }}>
-            {briefOpen ? 'Show less' : 'Read the full briefing'}
-          </AText>
-        </Pressable>
+        {trip.cultureBrief.details.length > 0 && (
+          <Pressable accessibilityRole="button" onPress={() => setBriefOpen((v) => !v)}>
+            <AText variant="small" color="rose" style={{ fontWeight: '600' }}>
+              {briefOpen ? 'Show less' : 'Read the full briefing'}
+            </AText>
+          </Pressable>
+        )}
       </View>
 
       <AButton
-        label={`View Lookbook — ${stats.outfits} looks, mix & match`}
+        label={`View Lookbook — up to ${stats.combinatorialOutfits} combinations`}
         kind="soft"
         onPress={() => router.push('/lookbook')}
       />
 
       {/* Packing groups */}
-      {packingGroups.map((group) => (
+      {groups.map((group) => (
         <View key={group.title}>
           <AText variant="eyebrow" color="secondary" style={{ marginBottom: Spacing.two }}>
             {group.title}
           </AText>
           <Card style={{ gap: Spacing.two }}>
             {group.lines.map((line) => {
-              const garment = garmentById(line.garmentId);
+              const garment = garments[line.garmentId];
+              if (!garment) return null;
               return (
                 <View
                   key={line.garmentId}
@@ -123,35 +201,19 @@ export default function PackingScreen() {
         </View>
       ))}
 
-      {/* Gap list */}
-      <AText variant="eyebrow" color="secondary">
-        You don&apos;t own these yet
-      </AText>
-      <View
-        style={{
-          borderWidth: 1,
-          borderColor: theme.warn,
-          borderRadius: Radius.lg,
-          padding: Spacing.three,
-          gap: 6,
-        }}>
-        <AText style={{ fontWeight: '600' }}>{packingGap.name}</AText>
-        <AText variant="caption" color="secondary">
-          {packingGap.why}
-        </AText>
-        <AButton
-          label={packingGap.cta}
-          onPress={() => {
-            const msg =
-              'Phase 1 wiring: opens size-filtered options via affiliate partners.';
-            if (Platform.OS === 'web') {
-              window.alert(msg);
-            } else {
-              Alert.alert('Shop the gap', msg);
-            }
-          }}
-        />
-      </View>
+      {/* Gaps */}
+      {gaps.length > 0 && (
+        <>
+          <AText variant="eyebrow" color="secondary">
+            You don&apos;t own these yet
+          </AText>
+          <View style={{ gap: Spacing.two }}>
+            {gaps.map((gap) => (
+              <GapCard key={gap.name} gap={gap} />
+            ))}
+          </View>
+        </>
+      )}
     </Screen>
   );
 }
