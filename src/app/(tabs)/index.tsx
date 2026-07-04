@@ -10,11 +10,19 @@ import { Screen } from '@/components/ui/screen';
 import { AText } from '@/components/ui/text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useAuth } from '@/lib/auth';
 import { capsuleStats } from '@/lib/engine';
 import { draftTrip, trip, wardrobe } from '@/lib/mock';
 import { modules } from '@/lib/modules';
 
 const packedGarments = wardrobe.filter((g) => g.category !== 'accessory');
+
+/** First name from the signed-in email, if available. */
+function greetingName(email?: string | null): string {
+  if (!email) return '';
+  const handle = email.split('@')[0].split(/[._]/)[0];
+  return handle ? `, ${handle.charAt(0).toUpperCase()}${handle.slice(1)}` : '';
+}
 
 function QuickAction({
   icon,
@@ -53,11 +61,12 @@ function QuickAction({
 
 export default function HomeScreen() {
   const stats = capsuleStats(packedGarments);
+  const { requiresAuth, user, signOut } = useAuth();
 
   return (
     <Screen>
       <AText variant="display" style={{ marginTop: Spacing.two }}>
-        Good morning ☀
+        Good morning{greetingName(user?.email)} ☀
       </AText>
       <AText variant="small" color="secondary" style={{ marginBottom: Spacing.two }}>
         Where to next?
@@ -145,6 +154,15 @@ export default function HomeScreen() {
           </Card>
         ))}
       </View>
+
+      {requiresAuth && user && (
+        <AButton
+          label="Sign out"
+          kind="ghost"
+          onPress={() => void signOut()}
+          style={{ marginTop: Spacing.three }}
+        />
+      )}
     </Screen>
   );
 }
