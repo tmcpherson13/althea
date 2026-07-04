@@ -108,10 +108,23 @@ export function targetsForNights(nights: number, lowC: number): Targets {
 
 const byCategory = (w: Garment[], c: GarmentCategory) => w.filter((g) => g.category === c);
 
-/** Coverage score against a reference pool + neutral bonus (Rule 4). */
-function coverageScore(g: Garment, pool: Garment[]): number {
+export type StyleRegister = 'casual' | 'smart-casual' | 'polished' | 'glam';
+
+/** Map the user's style register to a target formality (1–5). */
+export function styleToFormality(s: StyleRegister): number {
+  return { casual: 2, 'smart-casual': 3, polished: 4, glam: 5 }[s];
+}
+
+/**
+ * Coverage score against a reference pool + neutral bonus (Rule 4), plus a
+ * small bonus for items near the user's target formality (their style
+ * register) so capsules lean the way they like to dress.
+ */
+function coverageScore(g: Garment, pool: Garment[], formalityTarget?: number): number {
   const cov = pool.reduce((n, r) => n + (compatible(g, r) ? 1 : 0), 0);
-  return cov + (isNeutral(g.colors[0]) ? 2 : 0);
+  const neutral = isNeutral(g.colors[0]) ? 2 : 0;
+  const style = formalityTarget != null && Math.abs(g.formality - formalityTarget) <= 1 ? 1 : 0;
+  return cov + neutral + style;
 }
 
 /**
@@ -124,12 +137,15 @@ function pickAxis(
   refPool: Garment[],
   mustPairAll: Garment[][],
   target: number,
-  floor: number
+  floor: number,
+  formalityTarget?: number
 ): Garment[] {
   const pairsAll = (g: Garment) =>
     mustPairAll.every((group) => group.every((sel) => compatible(g, sel)));
 
-  const ranked = [...candidates].sort((a, b) => coverageScore(b, refPool) - coverageScore(a, refPool));
+  const ranked = [...candidates].sort(
+    (a, b) => coverageScore(b, refPool, formalityTarget) - coverageScore(a, refPool, formalityTarget)
+  );
 
   const strict = ranked.filter(pairsAll);
   const chosen = strict.slice(0, target);
@@ -177,7 +193,8 @@ export function selectCapsule(
   wardrobe: Garment[],
   highC: number,
   lowC: number,
-  nights: number
+  nights: number,
+  formalityTarget?: number
 ): Capsule {
   const t = targetsForNights(nights, lowC);
   const pool = wardrobe.filter((g) => suitsWeather(g, highC));
@@ -187,15 +204,19 @@ export function selectCapsule(
   const layersPool = byCategory(pool, 'layer');
 
   // Bottoms first, biased neutral, scored against the tops they must serve.
-  const bottoms = pickAxis(bottomsPool, topsPool, [], t.bottoms, Math.min(1, bottomsPool.length));
+  const bottoms = pickAxis(bottomsPool, topsPool, [], t.bottoms, Math.min(1, bottomsPool.length), formalityTarget);
   // Layers must pair with every chosen bottom; ensure a statement piece if any.
-  const layers = pickAxis(layersPool, [...topsPool, ...bottoms], [bottoms], t.layers, 0);
+  const layers = pickAxis(layersPool, [...topsPool, ...bottoms], [bottoms], t.layers, 0, formalityTarget);
   // Tops must pair with every chosen bottom AND every chosen layer.
-  const tops = pickAxis(topsPool, [...bottoms, ...layers], [bottoms, layers], t.tops, Math.min(2, topsPool.length));
+  const tops = pickAxis(topsPool, [...bottoms, ...layers], [bottoms, layers], t.tops, Math.min(2, topsPool.length), formalityTarget);
 
   const dresses = byCategory(pool, 'dress').slice(0, t.dresses);
   const shoes = [...byCategory(pool, 'shoe')]
-    .sort((a, b) => coverageScore(b, [...tops, ...bottoms]) - coverageScore(a, [...tops, ...bottoms]))
+    .sort(
+      (a, b) =>
+        coverageScore(b, [...tops, ...bottoms], formalityTarget) -
+        coverageScore(a, [...tops, ...bottoms], formalityTarget)
+    )
     .slice(0, t.shoes);
   const accessories = byCategory(pool, 'accessory').slice(0, 2);
 
@@ -350,12 +371,15 @@ export type TripInput = {
   highTempC: number;
   lowTempC: number;
   activities: string[];
+  /** The traveller's style register; biases capsule formality. */
+  styleRegister?: StyleRegister;
 };
 
 /** Build a complete, renderable Plan from a wardrobe and trip. */
 export function generatePlan(wardrobe: Garment[], input: TripInput): Plan {
   const culture = cultureFor(input.countryCode);
-  const capsule = selectCapsule(wardrobe, input.highTempC, input.lowTempC, input.nights);
+  const formalityTarget = styleToFormality(input.styleRegister ?? 'smart-casual');
+  const capsule = selectCapsule(wardrobe, input.highTempC, input.lowTempC, input.nights, formalityTarget);
 
   const all = [
     ...capsule.tops,

@@ -88,6 +88,10 @@ function RootNavigator() {
           name="journey-share"
           options={{ title: 'Share your journey', headerTitleStyle: { fontFamily: Fonts?.serif } }}
         />
+        <Stack.Screen
+          name="profile"
+          options={{ title: 'Profile', headerTitleStyle: { fontFamily: Fonts?.serif } }}
+        />
       </Stack>
     </ThemeProvider>
   );

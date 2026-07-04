@@ -125,7 +125,8 @@ function PromptHero({
 }
 
 export default function HomeScreen() {
-  const { requiresAuth, user, signOut } = useAuth();
+  const theme = useTheme();
+  const { requiresAuth, user } = useAuth();
   const { plan, needsWardrobe } = usePlan();
   const { refresh } = useActiveTrip();
 
@@ -137,9 +138,27 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      <AText variant="display" style={{ marginTop: Spacing.two }}>
-        Good morning{greetingName(user?.email)} ☀
-      </AText>
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginTop: Spacing.two,
+        }}>
+        <AText variant="display" style={{ flex: 1 }}>
+          Good morning{greetingName(user?.email)} ☀
+        </AText>
+        {requiresAuth && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Profile and settings"
+            onPress={() => router.push('/profile')}
+            hitSlop={10}
+            style={({ pressed }) => ({ padding: 4, opacity: pressed ? 0.6 : 1 })}>
+            <Ionicons name="settings-outline" size={22} color={theme.textSecondary} />
+          </Pressable>
+        )}
+      </View>
       <AText variant="small" color="secondary" style={{ marginBottom: Spacing.two }}>
         Where to next?
       </AText>
@@ -207,15 +226,6 @@ export default function HomeScreen() {
           </Card>
         ))}
       </View>
-
-      {requiresAuth && user && (
-        <AButton
-          label="Sign out"
-          kind="ghost"
-          onPress={() => void signOut()}
-          style={{ marginTop: Spacing.three }}
-        />
-      )}
     </Screen>
   );
 }

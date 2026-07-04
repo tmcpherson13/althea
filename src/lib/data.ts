@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '@/lib/auth';
-import { generatePlan, type TripInput } from '@/lib/capsule';
+import { generatePlan, type StyleRegister, type TripInput } from '@/lib/capsule';
 import { demoPlan, wardrobe as mockWardrobe } from '@/lib/mock';
 import { isLive, supabase } from '@/lib/supabase';
 import type { Garment, GarmentCategory, Plan } from '@/lib/types';
@@ -257,7 +257,7 @@ export async function createTrip(
   return rowToTripRecord(data);
 }
 
-function tripToInput(t: TripRecord): TripInput {
+function tripToInput(t: TripRecord, styleRegister?: StyleRegister): TripInput {
   return {
     city: t.destination.split(',')[0].trim(),
     country: t.country,
@@ -268,6 +268,7 @@ function tripToInput(t: TripRecord): TripInput {
     highTempC: t.weather?.highC ?? 22,
     lowTempC: t.weather?.lowC ?? 14,
     activities: t.activities,
+    styleRegister,
   };
 }
 
@@ -313,6 +314,92 @@ export function useActiveTrip(): { trip: TripRecord | null; loading: boolean; re
   return { trip, loading, refresh };
 }
 
+// ---------- profile ----------
+
+export type Sizes = { tops?: string; bottoms?: string; shoes?: string; dress?: string };
+
+export type Profile = {
+  displayName: string;
+  homeCity: string;
+  styleRegister: StyleRegister;
+  sizes: Sizes;
+};
+
+export const STYLE_OPTIONS: StyleRegister[] = ['casual', 'smart-casual', 'polished', 'glam'];
+
+const DEFAULT_PROFILE: Profile = {
+  displayName: '',
+  homeCity: '',
+  styleRegister: 'smart-casual',
+  sizes: {},
+};
+
+function rowToProfile(row: Record<string, unknown>): Profile {
+  const style = String(row.style_register ?? 'smart-casual');
+  return {
+    displayName: String(row.display_name ?? ''),
+    homeCity: String(row.home_city ?? ''),
+    styleRegister: (STYLE_OPTIONS as string[]).includes(style)
+      ? (style as StyleRegister)
+      : 'smart-casual',
+    sizes: (row.sizes as Sizes) ?? {},
+  };
+}
+
+export async function updateProfile(userId: string, patch: Profile): Promise<void> {
+  if (!supabase) throw new Error('The demo profile is read-only.');
+  const { error } = await supabase.from('profiles').upsert(
+    {
+      id: userId,
+      display_name: patch.displayName || null,
+      home_city: patch.homeCity || null,
+      style_register: patch.styleRegister,
+      sizes: patch.sizes,
+    },
+    { onConflict: 'id' }
+  );
+  if (error) throw new Error(error.message);
+}
+
+export function useProfile(): {
+  profile: Profile;
+  loading: boolean;
+  live: boolean;
+  refresh: () => Promise<void>;
+} {
+  const { user } = useAuth();
+  const live = isLive && Boolean(user);
+  const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  const [loading, setLoading] = useState(live);
+
+  const load = useCallback(async (): Promise<Profile> => {
+    if (!live || !supabase || !user) return DEFAULT_PROFILE;
+    const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    return data ? rowToProfile(data) : { ...DEFAULT_PROFILE };
+  }, [live, user]);
+
+  const refresh = useCallback(async () => {
+    const next = await load();
+    setProfile(next);
+    setLoading(false);
+  }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    void load().then((next) => {
+      if (active) {
+        setProfile(next);
+        setLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [load]);
+
+  return { profile, loading, live, refresh };
+}
+
 type PlanState = { plan: Plan | null; loading: boolean; needsWardrobe: boolean };
 
 /**
@@ -325,12 +412,17 @@ export function usePlan(): PlanState {
   const live = isLive && Boolean(user);
   const { items, loading: wardrobeLoading } = useWardrobe();
   const { trip, loading: tripLoading } = useActiveTrip();
+  const { profile } = useProfile();
 
   return useMemo<PlanState>(() => {
     if (!live) return { plan: demoPlan, loading: false, needsWardrobe: false };
     if (wardrobeLoading || tripLoading) return { plan: null, loading: true, needsWardrobe: false };
     if (!trip) return { plan: null, loading: false, needsWardrobe: false };
     if (items.length === 0) return { plan: null, loading: false, needsWardrobe: true };
-    return { plan: generatePlan(items, tripToInput(trip)), loading: false, needsWardrobe: false };
-  }, [live, items, wardrobeLoading, trip, tripLoading]);
+    return {
+      plan: generatePlan(items, tripToInput(trip, profile.styleRegister)),
+      loading: false,
+      needsWardrobe: false,
+    };
+  }, [live, items, wardrobeLoading, trip, tripLoading, profile.styleRegister]);
 }
